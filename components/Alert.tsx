@@ -19,7 +19,7 @@ export function Alert({
   return (
     <div
       role={variant === "error" ? "alert" : "status"}
-      className={`rounded-lg border px-4 py-3 text-sm ${styles[variant]}`}
+      className={`rounded-lg border px-3 py-2.5 text-xs leading-relaxed sm:px-4 sm:py-3 sm:text-sm ${styles[variant]}`}
     >
       {children}
     </div>

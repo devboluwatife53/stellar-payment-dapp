@@ -157,19 +157,15 @@ _Placeholder — wallet connected state with truncated address in the header._
 <!-- ![Mobile UI](public/images/mobile-responsive.png) -->
 _Placeholder — mobile responsive layout._
 
-### 3. Balance displayed
-![Balance displayed](public/images/xlm-balance.png)
-
-### 4. Batch payment form
+### 3. Batch payment form
 <!-- ![Batch payment](public/images/batch-payment.png) -->
 _Placeholder — batch payment form with multiple recipients._
 
-### 5. Transaction history
+### 4. Transaction history
 <!-- ![Transaction history](public/images/transaction-history.png) -->
 _Placeholder — transaction history panel._
 
-### 6. Successful transaction
-![Successful transaction](public/images/payment-confirmation.png)
+
 
 ## Example transaction
 

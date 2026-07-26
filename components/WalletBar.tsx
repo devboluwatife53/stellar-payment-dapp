@@ -21,28 +21,34 @@ export function WalletBar({
   onDisconnect,
 }: WalletBarProps) {
   return (
-    <header className="flex flex-col gap-3 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 className="text-base font-semibold text-slate-100 sm:text-lg">
+    <header className="space-y-3 border-b border-slate-800 pb-4 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-4">
+      {/* Title */}
+      <div className="shrink-0">
+        <h1 className="text-lg font-bold tracking-tight text-slate-100 sm:text-xl">
           Stellar Payroll
         </h1>
-        <p className="text-xs text-slate-400">Testnet</p>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-3">
+      {/* Wallet section */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         {publicKey ? (
           <>
-            <div className="flex flex-col items-end">
-              <span className="font-mono text-xs text-slate-200 sm:text-sm">
-                {truncateAddress(publicKey)}
+            {/* Address + network badge */}
+            <div className="flex items-center gap-2">
+              <span className="inline-block rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-400">
+                {network ?? "TESTNET"}
               </span>
-              {network && (
-                <span className="text-[10px] text-slate-500 sm:text-xs">{network}</span>
-              )}
+              <span
+                className="font-mono text-xs text-slate-300 sm:text-sm"
+                title={publicKey}
+              >
+                {truncateAddress(publicKey, 4, 4)}
+              </span>
             </div>
+            {/* Disconnect button */}
             <button
               onClick={onDisconnect}
-              className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 transition hover:bg-slate-800 sm:px-3 sm:py-1.5 sm:text-sm"
+              className="w-full rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 active:bg-slate-700 sm:w-auto"
             >
               Disconnect
             </button>
@@ -52,7 +58,7 @@ export function WalletBar({
             href={FREIGHTER_INSTALL_URL}
             target="_blank"
             rel="noreferrer"
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500 sm:px-4 sm:py-2 sm:text-sm"
+            className="block w-full rounded-lg bg-indigo-600 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-indigo-500 active:bg-indigo-700 sm:w-auto"
           >
             Install Freighter
           </a>
@@ -60,9 +66,16 @@ export function WalletBar({
           <button
             onClick={onConnect}
             disabled={connecting || installed === null}
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:py-2 sm:text-sm"
+            className="block w-full rounded-lg bg-indigo-600 px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-indigo-500 active:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
-            {connecting ? "Connecting..." : "Connect Wallet"}
+            {connecting ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                Connecting...
+              </span>
+            ) : (
+              "Connect Wallet"
+            )}
           </button>
         )}
       </div>

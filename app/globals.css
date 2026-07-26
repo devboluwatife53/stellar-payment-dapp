@@ -4,8 +4,26 @@
 
 :root {
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
 }
 
 body {
   @apply bg-slate-950 text-slate-100 antialiased;
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Better focus rings for mobile touch */
+input:focus,
+textarea:focus,
+button:focus-visible {
+  @apply outline-none ring-2 ring-indigo-500/40;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }

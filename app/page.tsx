@@ -29,7 +29,7 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-3 py-6 sm:gap-6 sm:px-4 sm:py-8">
+    <main className="mx-auto flex min-h-dvh min-h-screen max-w-2xl flex-col gap-4 px-4 py-5 sm:gap-6 sm:px-6 sm:py-8">
       <WalletBar
         installed={wallet.installed}
         publicKey={wallet.publicKey}
@@ -73,7 +73,7 @@ export default function Home() {
       )}
 
       {!wallet.publicKey ? (
-        <div className="rounded-xl border border-dashed border-slate-800 p-6 text-center text-sm text-slate-400 sm:p-10">
+        <div className="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-400 sm:p-10">
           <p>
             Connect your Freighter wallet to send batch payments on Stellar
             Testnet.
