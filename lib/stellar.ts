@@ -1,6 +1,6 @@
 /**
- * Stellar / Horizon interactions: balance lookup, funding, and building +
- * submitting payment transactions. Every network call is wrapped so callers
+ * Stellar / Horizon interactions: balance lookup, funding, batch payment
+ * building, and transaction history. Every network call is wrapped so callers
  * get either clean data or a thrown Error with a human-readable message.
  */
 
@@ -56,39 +56,58 @@ export async function fetchBalance(publicKey: string): Promise<AccountBalance> {
 export async function fundWithFriendbot(publicKey: string): Promise<void> {
   let response: Response;
   try {
-    response = await fetch(`${FRIENDBOT_URL}/?addr=${encodeURIComponent(publicKey)}`);
+    response = await fetch(
+      `${FRIENDBOT_URL}/?addr=${encodeURIComponent(publicKey)}`,
+    );
   } catch {
     throw new Error("Could not reach Friendbot. Check your connection.");
   }
   if (!response.ok) {
-    // Friendbot returns 400 if the account is already funded.
     if (response.status === 400) {
-      throw new Error("Friendbot rejected the request — the account may already be funded.");
+      throw new Error(
+        "Friendbot rejected the request — the account may already be funded.",
+      );
     }
     throw new Error(`Friendbot funding failed (HTTP ${response.status}).`);
   }
 }
 
-export interface SendPaymentParams {
-  sourcePublicKey: string;
-  destination: string;
+/* ------------------------------------------------------------------ */
+/*  Batch payment types                                               */
+/* ------------------------------------------------------------------ */
+
+export interface RecipientEntry {
+  address: string;
   amount: string;
 }
 
-export interface SendPaymentResult {
+export interface BatchPaymentParams {
+  sourcePublicKey: string;
+  recipients: RecipientEntry[];
+}
+
+export interface BatchPaymentResult {
   hash: string;
+  recipientCount: number;
+  totalXlm: string;
+  /** Per-recipient results for UI tracking. */
+  perRecipient: { address: string; amount: string; ok: boolean }[];
 }
 
 /**
- * Build a payment transaction, have Freighter sign it, and submit to Horizon.
- * Returns the transaction hash on success; throws a readable Error otherwise.
+ * Build a single multi-operation transaction containing one Payment op per
+ * recipient, have Freighter sign it, and submit to Horizon.  This is atomic —
+ * either all payments succeed or the whole transaction is rejected.
  */
-export async function sendPayment({
+export async function sendBatchPayment({
   sourcePublicKey,
-  destination,
-  amount,
-}: SendPaymentParams): Promise<SendPaymentResult> {
-  // Load the source account to get the current sequence number.
+  recipients,
+}: BatchPaymentParams): Promise<BatchPaymentResult> {
+  if (recipients.length === 0) {
+    throw new Error("No recipients provided.");
+  }
+
+  // Load the source account for the sequence number.
   let sourceAccount;
   try {
     sourceAccount = await server.loadAccount(sourcePublicKey);
@@ -99,20 +118,23 @@ export async function sendPayment({
     throw new Error(parseHorizonError(err, "Could not load your account."));
   }
 
-  // Build the transaction.
-  const tx = new TransactionBuilder(sourceAccount, {
-    fee: BASE_FEE,
+  // Build one transaction with N payment operations.
+  const txBuilder = new TransactionBuilder(sourceAccount, {
+    fee: String(BigInt(BASE_FEE) * BigInt(recipients.length)),
     networkPassphrase: NETWORK_PASSPHRASE || Networks.TESTNET,
-  })
-    .addOperation(
+  });
+
+  for (const r of recipients) {
+    txBuilder.addOperation(
       Operation.payment({
-        destination,
+        destination: r.address,
         asset: Asset.native(),
-        amount,
+        amount: r.amount,
       }),
-    )
-    .setTimeout(180)
-    .build();
+    );
+  }
+
+  const tx = txBuilder.setTimeout(180).build();
 
   // Sign with Freighter.
   const signedXdr = await signTransactionXdr(
@@ -121,7 +143,6 @@ export async function sendPayment({
     sourcePublicKey,
   );
 
-  // Rebuild the signed transaction and submit.
   const signedTx = TransactionBuilder.fromXDR(
     signedXdr,
     NETWORK_PASSPHRASE || Networks.TESTNET,
@@ -129,11 +150,51 @@ export async function sendPayment({
 
   try {
     const result = await server.submitTransaction(signedTx);
-    return { hash: result.hash };
+    const total = recipients.reduce(
+      (sum, r) => sum + Number(r.amount),
+      0,
+    );
+    return {
+      hash: result.hash,
+      recipientCount: recipients.length,
+      totalXlm: total.toFixed(7),
+      perRecipient: recipients.map((r) => ({
+        address: r.address,
+        amount: r.amount,
+        ok: true,
+      })),
+    };
   } catch (err) {
-    throw new Error(parseHorizonError(err, "Transaction submission failed."));
+    throw new Error(parseHorizonError(err, "Batch payment failed."));
   }
 }
+
+/* ------------------------------------------------------------------ */
+/*  Transaction history                                               */
+/* ------------------------------------------------------------------ */
+
+export interface HistoryEntry {
+  hash: string;
+  recipientCount: number;
+  totalXlm: string;
+  timestamp: string;
+  perRecipient: { address: string; amount: string; ok: boolean }[];
+}
+
+/** In-memory history (resets on page reload). */
+let _history: HistoryEntry[] = [];
+
+export function getHistory(): HistoryEntry[] {
+  return [..._history];
+}
+
+export function addToHistory(entry: HistoryEntry): void {
+  _history = [entry, ..._history].slice(0, 50); // keep last 50
+}
+
+/* ------------------------------------------------------------------ */
+/*  Validation helpers                                                */
+/* ------------------------------------------------------------------ */
 
 /** Validate a Stellar public key (G... ed25519). */
 export function isValidPublicKey(key: string): boolean {
@@ -164,7 +225,6 @@ export function validateAmount(
   if (amount <= 0) {
     return { valid: false, error: "Amount must be greater than zero." };
   }
-  // Stellar supports 7 decimal places max.
   if (!/^\d+(\.\d{1,7})?$/.test(amountStr.trim())) {
     return { valid: false, error: "Max 7 decimal places allowed." };
   }
@@ -181,6 +241,59 @@ export function validateAmount(
   return { valid: true };
 }
 
+/**
+ * Validate a full batch — total must not exceed spendable balance.
+ */
+export function validateBatch(
+  recipients: RecipientEntry[],
+  balanceXlm: string,
+): { valid: boolean; error?: string } {
+  if (recipients.length === 0) {
+    return { valid: false, error: "Add at least one recipient." };
+  }
+
+  for (let i = 0; i < recipients.length; i++) {
+    const r = recipients[i];
+    if (!isValidPublicKey(r.address)) {
+      return {
+        valid: false,
+        error: `Recipient ${i + 1} has an invalid address.`,
+      };
+    }
+    const amt = Number(r.amount);
+    if (!r.amount || Number.isNaN(amt) || amt <= 0) {
+      return {
+        valid: false,
+        error: `Recipient ${i + 1} has an invalid amount.`,
+      };
+    }
+    if (!/^\d+(\.\d{1,7})?$/.test(r.amount)) {
+      return {
+        valid: false,
+        error: `Recipient ${i + 1}: max 7 decimal places.`,
+      };
+    }
+  }
+
+  const total = recipients.reduce((sum, r) => sum + Number(r.amount), 0);
+  const balance = Number(balanceXlm);
+  const spendable = balance - RESERVE_BUFFER_XLM;
+  if (total > spendable) {
+    return {
+      valid: false,
+      error: `Total ${total.toFixed(
+        7,
+      )} XLM exceeds spendable balance (~${spendable.toFixed(4)} XLM).`,
+    };
+  }
+
+  return { valid: true };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Error parsing                                                     */
+/* ------------------------------------------------------------------ */
+
 /** True if the error is a Horizon 404 (account not found). */
 function isNotFound(err: unknown): boolean {
   const e = err as { response?: { status?: number }; status?: number };
@@ -188,9 +301,7 @@ function isNotFound(err: unknown): boolean {
 }
 
 /**
- * Turn a Horizon/SDK error into a readable message. Horizon returns a
- * structured "problem" document with result codes for failed transactions;
- * we surface those rather than dumping raw JSON.
+ * Turn a Horizon/SDK error into a readable message.
  */
 export function parseHorizonError(err: unknown, fallback: string): string {
   const e = err as {
