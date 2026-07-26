@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Stellar Payment dApp",
+  title: "Stellar Payroll",
   description:
-    "Connect Freighter, view your XLM balance, and send payments on Stellar Testnet.",
+    "Batch XLM payments on Stellar Testnet — connect Freighter, add recipients, and send payroll in one go.",
 };
 
 export default function RootLayout({
