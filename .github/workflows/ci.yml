@@ -32,14 +32,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: stellar/actions@main
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          protocol-version: 21
+          targets: wasm32-unknown-unknown
 
       - name: Build Soroban contract
-        run: |
-          rustup target add wasm32-unknown-unknown
-          cargo build --release --target wasm32-unknown-unknown
+        run: cargo build --release --target wasm32-unknown-unknown
         working-directory: contracts/batch_payroll
 
       - name: Check contract
