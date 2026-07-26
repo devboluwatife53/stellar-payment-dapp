@@ -1,19 +1,35 @@
 "use client";
 
+import { useState } from "react";
 import { useWallet } from "@/hooks/useWallet";
 import { useBalance } from "@/hooks/useBalance";
 import { WalletBar } from "@/components/WalletBar";
 import { BalanceCard } from "@/components/BalanceCard";
-import { SendPaymentForm } from "@/components/SendPaymentForm";
+import { BatchPaymentForm } from "@/components/BatchPaymentForm";
+import { TransactionHistory } from "@/components/TransactionHistory";
 import { Alert } from "@/components/Alert";
-import { EXPECTED_NETWORK, FREIGHTER_INSTALL_URL } from "@/lib/constants";
+import {
+  EXPECTED_NETWORK,
+  FREIGHTER_INSTALL_URL,
+} from "@/lib/constants";
+import {
+  getHistory,
+  addToHistory,
+  type HistoryEntry,
+} from "@/lib/stellar";
 
 export default function Home() {
   const wallet = useWallet();
   const balance = useBalance(wallet.publicKey);
+  const [history, setHistory] = useState<HistoryEntry[]>(getHistory());
+
+  function handleTxComplete(entry: HistoryEntry) {
+    addToHistory(entry);
+    setHistory(getHistory());
+  }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-3 py-6 sm:gap-6 sm:px-4 sm:py-8">
       <WalletBar
         installed={wallet.installed}
         publicKey={wallet.publicKey}
@@ -57,8 +73,11 @@ export default function Home() {
       )}
 
       {!wallet.publicKey ? (
-        <div className="rounded-xl border border-dashed border-slate-800 p-10 text-center text-slate-400">
-          <p>Connect your Freighter wallet to view your balance and send XLM.</p>
+        <div className="rounded-xl border border-dashed border-slate-800 p-6 text-center text-sm text-slate-400 sm:p-10">
+          <p>
+            Connect your Freighter wallet to send batch payments on Stellar
+            Testnet.
+          </p>
         </div>
       ) : (
         <>
@@ -72,18 +91,21 @@ export default function Home() {
             onFund={balance.fund}
           />
 
-          <SendPaymentForm
+          <BatchPaymentForm
             sourcePublicKey={wallet.publicKey}
             balanceXlm={balance.xlm}
             funded={balance.funded}
             disabled={wallet.wrongNetwork}
             onSuccess={balance.refresh}
+            onTxComplete={handleTxComplete}
           />
+
+          <TransactionHistory entries={history} />
         </>
       )}
 
       <footer className="mt-auto pt-4 text-center text-xs text-slate-600">
-        Stellar Testnet · Built with Next.js, Freighter &amp; the Stellar SDK
+        Stellar Payroll · Built with Next.js, Freighter &amp; the Stellar SDK
       </footer>
     </main>
   );
