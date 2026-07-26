@@ -5,8 +5,6 @@
 A batch payment dApp for **Stellar Testnet** — connect your Freighter wallet,
 add multiple recipients, and send payroll in a single transaction.
 
-> **Hackathon track:** Level 1 — White Belt
-
 ## Live Demo
 
 🔗 [https://stellar-payroll.vercel.app](https://stellar-payroll.vercel.app)
@@ -149,21 +147,17 @@ XLM.
 
 ## Screenshots
 
-### 1. Wallet connected (Desktop)
-<!-- ![Wallet connected](public/images/wallet-connected.png) -->
-_Placeholder — wallet connected state with truncated address in the header._
+### Main UI
+![Main UI](public/images/main-ui.png)
 
-### 2. Mobile responsive UI
-<!-- ![Mobile UI](public/images/mobile-responsive.png) -->
-_Placeholder — mobile responsive layout._
+### Mobile View
+![Mobile View](public/images/mobile-view.png)
 
-### 3. Batch payment form
-<!-- ![Batch payment](public/images/batch-payment.png) -->
-_Placeholder — batch payment form with multiple recipients._
+### CI Pipeline
+![CI Pipeline](public/images/ci.png)
 
-### 4. Transaction history
-<!-- ![Transaction history](public/images/transaction-history.png) -->
-_Placeholder — transaction history panel._
+### Test Output
+![Test Output](public/images/test.png)
 
 
 
