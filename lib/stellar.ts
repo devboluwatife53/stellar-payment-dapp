@@ -181,15 +181,34 @@ export interface HistoryEntry {
   perRecipient: { address: string; amount: string; ok: boolean }[];
 }
 
-/** In-memory history (resets on page reload). */
-let _history: HistoryEntry[] = [];
+const HISTORY_KEY = "stellar_payroll_history";
+
+function _loadHistory(): HistoryEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? (JSON.parse(raw) as HistoryEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function _saveHistory(entries: HistoryEntry[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
+  } catch {
+    // storage full or unavailable — silently ignore
+  }
+}
 
 export function getHistory(): HistoryEntry[] {
-  return [..._history];
+  return _loadHistory();
 }
 
 export function addToHistory(entry: HistoryEntry): void {
-  _history = [entry, ..._history].slice(0, 50); // keep last 50
+  const updated = [entry, ..._loadHistory()].slice(0, 50);
+  _saveHistory(updated);
 }
 
 /* ------------------------------------------------------------------ */

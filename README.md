@@ -7,7 +7,7 @@ add multiple recipients, and send payroll in a single transaction.
 
 ## Live Demo
 
-🔗 [https://stellar-payroll.vercel.app](https://stellar-payroll.vercel.app)
+🔗 [https://stellar-payroll-dapp.vercel.app](https://stellar-payroll-dapp.vercel.app)
 
 ## Demo Video
 
@@ -177,4 +177,4 @@ A successful batch payment sent with this dApp on Stellar Testnet:
   cover the account's minimum reserve and transaction fees.
 - Transaction fees scale with the number of recipients (100 stroops per
   operation).
-- Transaction history is stored in session memory and resets on page reload.
+- Transaction history is persisted in localStorage and survives page reloads.
