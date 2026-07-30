@@ -11,7 +11,7 @@ add multiple recipients, and send payroll in a single transaction.
 
 ## Demo Video
 
-📹 [Watch the 2-minute walkthrough](https://youtu.be/your-video-id)
+📹 [Watch the demo](https://www.loom.com/share/ed9c68472c484dd798a141c66bb0dc00)
 
 ## What it does
 
