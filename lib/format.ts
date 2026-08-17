@@ -6,8 +6,8 @@ export function truncateAddress(address: string, lead = 4, tail = 4): string {
   return `${address.slice(0, lead)}...${address.slice(-tail)}`;
 }
 
-/** Format an XLM balance string to 7 decimal places for display. */
-export function formatXlm(balance: string): string {
+/** Format a balance string (XLM or USDC) to 7 decimal places for display. */
+export function formatAmount(balance: string): string {
   const n = Number(balance);
   if (Number.isNaN(n)) return balance;
   return n.toLocaleString("en-US", {

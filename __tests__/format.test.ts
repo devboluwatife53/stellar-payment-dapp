@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { truncateAddress, formatXlm } from "@/lib/format";
+import { truncateAddress, formatAmount } from "@/lib/format";
 
 describe("truncateAddress", () => {
   it("truncates a long Stellar address", () => {
@@ -20,16 +20,16 @@ describe("truncateAddress", () => {
   });
 });
 
-describe("formatXlm", () => {
+describe("formatAmount", () => {
   it("formats a numeric string to 7 decimal places", () => {
-    expect(formatXlm("100")).toBe("100.0000000");
+    expect(formatAmount("100")).toBe("100.0000000");
   });
 
   it("handles decimal values", () => {
-    expect(formatXlm("12.5")).toBe("12.5000000");
+    expect(formatAmount("12.5")).toBe("12.5000000");
   });
 
   it("returns the original string if not a valid number", () => {
-    expect(formatXlm("abc")).toBe("abc");
+    expect(formatAmount("abc")).toBe("abc");
   });
 });

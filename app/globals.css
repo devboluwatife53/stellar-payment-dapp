@@ -9,7 +9,7 @@
 }
 
 body {
-  @apply bg-slate-950 text-slate-100 antialiased;
+  font-feature-settings: "ss01" 1, "ss03" 1;
   padding-top: var(--sat);
   padding-bottom: var(--sab);
   -webkit-tap-highlight-color: transparent;
@@ -19,11 +19,20 @@ body {
 input:focus,
 textarea:focus,
 button:focus-visible {
-  @apply outline-none ring-2 ring-indigo-500/40;
+  @apply outline-none ring-2 ring-signal-blue/40;
 }
 
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

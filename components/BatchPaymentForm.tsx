@@ -6,6 +6,7 @@ import {
   validateBatch,
   isValidPublicKey,
   type RecipientEntry,
+  type AssetCode,
 } from "@/lib/stellar";
 import { explorerTxUrl } from "@/lib/constants";
 import { Alert } from "./Alert";
@@ -13,13 +14,17 @@ import { Alert } from "./Alert";
 interface BatchPaymentFormProps {
   sourcePublicKey: string;
   balanceXlm: string | null;
+  balanceUsdc: string | null;
   funded: boolean;
   disabled?: boolean;
+  addingTrustline: boolean;
+  onAddTrustline: () => void;
   onSuccess: () => void;
   onTxComplete: (entry: {
     hash: string;
     recipientCount: number;
-    totalXlm: string;
+    totalAmount: string;
+    asset: AssetCode;
     timestamp: string;
     perRecipient: { address: string; amount: string; ok: boolean }[];
   }) => void;
@@ -28,17 +33,21 @@ interface BatchPaymentFormProps {
 type Status =
   | { kind: "idle" }
   | { kind: "submitting"; progress: string }
-  | { kind: "success"; hash: string; recipientCount: number; totalXlm: string }
+  | { kind: "success"; hash: string; recipientCount: number; totalAmount: string; asset: AssetCode }
   | { kind: "error"; message: string };
 
 export function BatchPaymentForm({
   sourcePublicKey,
   balanceXlm,
+  balanceUsdc,
   funded,
   disabled,
+  addingTrustline,
+  onAddTrustline,
   onSuccess,
   onTxComplete,
 }: BatchPaymentFormProps) {
+  const [asset, setAsset] = useState<AssetCode>("XLM");
   const [recipientText, setRecipientText] = useState("");
   const [mode, setMode] = useState<"same" | "individual">("same");
   const [sameAmount, setSameAmount] = useState("");
@@ -47,6 +56,7 @@ export function BatchPaymentForm({
 
   const submitting = status.kind === "submitting";
   const formDisabled = disabled || !funded || submitting;
+  const assetBalance = asset === "XLM" ? balanceXlm : balanceUsdc;
 
   /** Parse the textarea into RecipientEntry[] */
   function parseRecipients(): RecipientEntry[] {
@@ -130,13 +140,11 @@ export function BatchPaymentForm({
       }
     }
 
-    // Check total against balance
-    if (balanceXlm) {
-      const batchCheck = validateBatch(recipients, balanceXlm);
-      if (!batchCheck.valid) {
-        setFieldError(batchCheck.error ?? "Invalid batch.");
-        return;
-      }
+    // Check total against the selected asset's balance
+    const batchCheck = validateBatch(recipients, assetBalance, asset);
+    if (!batchCheck.valid) {
+      setFieldError(batchCheck.error ?? "Invalid batch.");
+      return;
     }
 
     setStatus({
@@ -148,19 +156,22 @@ export function BatchPaymentForm({
       const result = await sendBatchPayment({
         sourcePublicKey,
         recipients,
+        asset,
       });
 
       setStatus({
         kind: "success",
         hash: result.hash,
         recipientCount: result.recipientCount,
-        totalXlm: result.totalXlm,
+        totalAmount: result.totalAmount,
+        asset: result.asset,
       });
 
       onTxComplete({
         hash: result.hash,
         recipientCount: result.recipientCount,
-        totalXlm: result.totalXlm,
+        totalAmount: result.totalAmount,
+        asset: result.asset,
         timestamp: new Date().toISOString(),
         perRecipient: result.perRecipient,
       });
@@ -177,15 +188,44 @@ export function BatchPaymentForm({
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 sm:p-5">
-      <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400 sm:mb-4 sm:text-sm">
+    <section className="rounded-md border-[0.5px] border-white/7 bg-graphite p-3 sm:p-5">
+      <h2 className="mb-3 text-[9px] font-medium uppercase tracking-wide text-ash sm:mb-4 sm:text-[10px]">
         Batch Payment
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+        {/* Asset selector */}
+        <div className="flex gap-2">
+          {(["XLM", "USDC"] as const).map((code) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => setAsset(code)}
+              disabled={formDisabled || (code === "USDC" && balanceUsdc === null)}
+              className={`rounded-pill border px-3 py-1.5 text-xs font-normal transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                asset === code
+                  ? "border-signal-blue bg-signal-blue/10 text-signal-blue"
+                  : "border-transparent bg-white/5 text-snow hover:bg-white/10"
+              }`}
+            >
+              {code}
+            </button>
+          ))}
+          {balanceUsdc === null && (
+            <button
+              type="button"
+              onClick={onAddTrustline}
+              disabled={addingTrustline}
+              className="self-center text-[10px] font-normal text-ash underline underline-offset-2 transition-colors hover:text-snow disabled:opacity-50"
+            >
+              {addingTrustline ? "Adding trustline..." : "No USDC trustline — add one"}
+            </button>
+          )}
+        </div>
+
         {/* Mode selector */}
         <div className="flex gap-4 text-xs sm:text-sm">
-          <label className="flex items-center gap-1.5 text-slate-300">
+          <label className="flex items-center gap-1.5 text-chalk">
             <input
               type="radio"
               name="mode"
@@ -193,11 +233,11 @@ export function BatchPaymentForm({
               checked={mode === "same"}
               onChange={() => setMode("same")}
               disabled={formDisabled}
-              className="accent-indigo-500"
+              className="accent-signal-blue"
             />
             Same amount
           </label>
-          <label className="flex items-center gap-1.5 text-slate-300">
+          <label className="flex items-center gap-1.5 text-chalk">
             <input
               type="radio"
               name="mode"
@@ -205,7 +245,7 @@ export function BatchPaymentForm({
               checked={mode === "individual"}
               onChange={() => setMode("individual")}
               disabled={formDisabled}
-              className="accent-indigo-500"
+              className="accent-signal-blue"
             />
             Individual amounts
           </label>
@@ -215,7 +255,7 @@ export function BatchPaymentForm({
         <div>
           <label
             htmlFor="recipients"
-            className="mb-1 block text-xs text-slate-300 sm:text-sm"
+            className="mb-1 block text-xs text-chalk sm:text-sm"
           >
             {mode === "same"
               ? "Recipient addresses (one per line or comma-separated)"
@@ -233,9 +273,9 @@ export function BatchPaymentForm({
             disabled={formDisabled}
             spellCheck={false}
             rows={4}
-            className="w-full resize-y rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-xs text-slate-100 outline-none transition focus:border-indigo-500 disabled:opacity-50 sm:px-3 sm:py-2 sm:text-sm"
+            className="w-full resize-y rounded-sm border-[0.5px] border-white/8 bg-charcoal px-2.5 py-1.5 font-mono text-xs text-snow outline-none transition-colors focus:border-signal-blue disabled:opacity-50 sm:px-3 sm:py-2 sm:text-sm"
           />
-          <p className="mt-1 text-[10px] text-slate-500 sm:text-xs">
+          <p className="mt-1 text-[10px] text-steel sm:text-xs">
             {recipientText
               .split(/[\n,]+/)
               .filter((l) => l.trim()).length}{" "}
@@ -248,9 +288,9 @@ export function BatchPaymentForm({
           <div>
             <label
               htmlFor="amount"
-              className="mb-1 block text-xs text-slate-300 sm:text-sm"
+              className="mb-1 block text-xs text-chalk sm:text-sm"
             >
-              Amount per recipient (XLM)
+              Amount per recipient ({asset})
             </label>
             <input
               id="amount"
@@ -261,17 +301,17 @@ export function BatchPaymentForm({
               placeholder="0.0000000"
               disabled={formDisabled}
               autoComplete="off"
-              className="w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 font-mono text-xs text-slate-100 outline-none transition focus:border-indigo-500 disabled:opacity-50 sm:px-3 sm:py-2 sm:text-sm"
+              className="w-full rounded-sm border-[0.5px] border-white/8 bg-charcoal px-2.5 py-1.5 font-mono text-xs text-snow outline-none transition-colors focus:border-signal-blue disabled:opacity-50 sm:px-3 sm:py-2 sm:text-sm"
             />
           </div>
         )}
 
         {/* Total preview */}
         {getTotalPreview() !== "0" && (
-          <div className="flex items-center justify-between rounded-md bg-slate-800/50 px-3 py-2 text-xs sm:text-sm">
-            <span className="text-slate-400">Total to be sent</span>
-            <span className="font-mono font-semibold text-slate-100">
-              {getTotalPreview()} XLM
+          <div className="flex items-center justify-between rounded-sm bg-charcoal px-3 py-2 text-xs sm:text-sm">
+            <span className="text-ash">Total to be sent</span>
+            <span className="font-mono font-medium text-snow">
+              {getTotalPreview()} {asset}
             </span>
           </div>
         )}
@@ -281,7 +321,7 @@ export function BatchPaymentForm({
         <button
           type="submit"
           disabled={formDisabled}
-          className="w-full rounded-md bg-indigo-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:py-2.5 sm:text-sm"
+          className="w-full rounded-pill bg-bone px-3 py-2 text-xs font-normal text-ink shadow-[0_1px_4px_rgba(0,0,0,0.1),0_0_1px_rgba(0,0,0,0.1)] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:py-2.5 sm:text-sm"
         >
           {submitting
             ? status.kind === "submitting"
@@ -291,7 +331,7 @@ export function BatchPaymentForm({
         </button>
 
         {!funded && (
-          <p className="text-[10px] text-slate-500 sm:text-xs">
+          <p className="text-[10px] text-steel sm:text-xs">
             Fund your account before sending payments.
           </p>
         )}
@@ -303,15 +343,15 @@ export function BatchPaymentForm({
             <p className="font-medium">
               Batch payment sent to {status.recipientCount} recipient(s).
             </p>
-            <p className="mt-0.5 text-xs text-slate-300">
-              Total: {status.totalXlm} XLM
+            <p className="mt-0.5 text-xs text-chalk">
+              Total: {status.totalAmount} {status.asset}
             </p>
             <p className="mt-1 break-all font-mono text-xs">{status.hash}</p>
             <a
               href={explorerTxUrl(status.hash)}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-block underline underline-offset-2 hover:text-emerald-100"
+              className="mt-2 inline-block underline underline-offset-2 hover:text-snow"
             >
               View on Stellar Expert →
             </a>

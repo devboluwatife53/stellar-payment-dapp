@@ -18,35 +18,94 @@ import {
   NETWORK_PASSPHRASE,
   FRIENDBOT_URL,
   RESERVE_BUFFER_XLM,
+  USDC_ISSUER,
+  USDC_ASSET_CODE,
 } from "./constants";
 import { signTransactionXdr } from "./freighter";
 
 const server = new Horizon.Server(HORIZON_URL);
 
+export type AssetCode = "XLM" | "USDC";
+
+/** Resolve an AssetCode into the SDK Asset object used in operations. */
+export function getAsset(code: AssetCode): Asset {
+  return code === "USDC" ? new Asset(USDC_ASSET_CODE, USDC_ISSUER) : Asset.native();
+}
+
 export interface AccountBalance {
   /** Native XLM balance as a string, e.g. "1234.5678900". */
   xlm: string;
+  /** USDC balance as a string, or null if no trustline exists yet. */
+  usdc: string | null;
   /** Whether the account exists/is funded on the network. */
   funded: boolean;
 }
 
 /**
- * Fetch the native XLM balance for an account. If the account isn't funded
- * yet (404 from Horizon), returns { funded: false } instead of throwing.
+ * Fetch the native XLM and USDC balances for an account. If the account
+ * isn't funded yet (404 from Horizon), returns { funded: false } instead of
+ * throwing. `usdc` is null when the account has no USDC trustline.
  */
 export async function fetchBalance(publicKey: string): Promise<AccountBalance> {
   try {
     const account = await server.loadAccount(publicKey);
     const native = account.balances.find((b) => b.asset_type === "native");
+    const usdcLine = account.balances.find(
+      (b) =>
+        (b.asset_type === "credit_alphanum4" || b.asset_type === "credit_alphanum12") &&
+        b.asset_code === USDC_ASSET_CODE &&
+        b.asset_issuer === USDC_ISSUER,
+    );
     return {
       xlm: native ? native.balance : "0",
+      usdc: usdcLine ? usdcLine.balance : null,
       funded: true,
     };
   } catch (err: unknown) {
     if (isNotFound(err)) {
-      return { xlm: "0", funded: false };
+      return { xlm: "0", usdc: null, funded: false };
     }
     throw new Error(parseHorizonError(err, "Failed to fetch balance."));
+  }
+}
+
+/**
+ * Establish a trustline to the USDC asset so the account can hold and
+ * receive it. Requires ~0.5 XLM of additional reserve.
+ */
+export async function addUsdcTrustline(publicKey: string): Promise<void> {
+  let sourceAccount;
+  try {
+    sourceAccount = await server.loadAccount(publicKey);
+  } catch (err) {
+    if (isNotFound(err)) {
+      throw new Error("Your account isn't funded on testnet yet.");
+    }
+    throw new Error(parseHorizonError(err, "Could not load your account."));
+  }
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE || Networks.TESTNET,
+  })
+    .addOperation(Operation.changeTrust({ asset: getAsset("USDC") }))
+    .setTimeout(180)
+    .build();
+
+  const signedXdr = await signTransactionXdr(
+    tx.toXDR(),
+    NETWORK_PASSPHRASE || Networks.TESTNET,
+    publicKey,
+  );
+  const signedTx = TransactionBuilder.fromXDR(
+    signedXdr,
+    NETWORK_PASSPHRASE || Networks.TESTNET,
+  );
+
+  try {
+    await server.submitTransaction(signedTx);
+  } catch (err) {
+    throw new Error(parseHorizonError(err, "Failed to add USDC trustline."));
   }
 }
 
@@ -84,12 +143,14 @@ export interface RecipientEntry {
 export interface BatchPaymentParams {
   sourcePublicKey: string;
   recipients: RecipientEntry[];
+  asset?: AssetCode;
 }
 
 export interface BatchPaymentResult {
   hash: string;
   recipientCount: number;
-  totalXlm: string;
+  totalAmount: string;
+  asset: AssetCode;
   /** Per-recipient results for UI tracking. */
   perRecipient: { address: string; amount: string; ok: boolean }[];
 }
@@ -97,11 +158,13 @@ export interface BatchPaymentResult {
 /**
  * Build a single multi-operation transaction containing one Payment op per
  * recipient, have Freighter sign it, and submit to Horizon.  This is atomic —
- * either all payments succeed or the whole transaction is rejected.
+ * either all payments succeed or the whole transaction is rejected. The
+ * transaction fee is always paid in XLM regardless of the asset sent.
  */
 export async function sendBatchPayment({
   sourcePublicKey,
   recipients,
+  asset = "XLM",
 }: BatchPaymentParams): Promise<BatchPaymentResult> {
   if (recipients.length === 0) {
     throw new Error("No recipients provided.");
@@ -118,6 +181,8 @@ export async function sendBatchPayment({
     throw new Error(parseHorizonError(err, "Could not load your account."));
   }
 
+  const paymentAsset = getAsset(asset);
+
   // Build one transaction with N payment operations.
   const txBuilder = new TransactionBuilder(sourceAccount, {
     fee: String(BigInt(BASE_FEE) * BigInt(recipients.length)),
@@ -128,7 +193,7 @@ export async function sendBatchPayment({
     txBuilder.addOperation(
       Operation.payment({
         destination: r.address,
-        asset: Asset.native(),
+        asset: paymentAsset,
         amount: r.amount,
       }),
     );
@@ -157,7 +222,8 @@ export async function sendBatchPayment({
     return {
       hash: result.hash,
       recipientCount: recipients.length,
-      totalXlm: total.toFixed(7),
+      totalAmount: total.toFixed(7),
+      asset,
       perRecipient: recipients.map((r) => ({
         address: r.address,
         amount: r.amount,
@@ -176,18 +242,33 @@ export async function sendBatchPayment({
 export interface HistoryEntry {
   hash: string;
   recipientCount: number;
-  totalXlm: string;
+  totalAmount: string;
+  asset: AssetCode;
   timestamp: string;
   perRecipient: { address: string; amount: string; ok: boolean }[];
 }
 
 const HISTORY_KEY = "stellar_payroll_history";
 
+/** Older entries were saved before USDC support, with `totalXlm` and no `asset`. */
+type LegacyHistoryEntry = Partial<HistoryEntry> & {
+  totalXlm?: string;
+};
+
 function _loadHistory(): HistoryEntry[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
-    return raw ? (JSON.parse(raw) as HistoryEntry[]) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as LegacyHistoryEntry[];
+    return parsed.map((entry) => ({
+      hash: entry.hash ?? "",
+      recipientCount: entry.recipientCount ?? 0,
+      totalAmount: entry.totalAmount ?? entry.totalXlm ?? "0",
+      asset: entry.asset ?? "XLM",
+      timestamp: entry.timestamp ?? new Date(0).toISOString(),
+      perRecipient: entry.perRecipient ?? [],
+    }));
   } catch {
     return [];
   }
@@ -261,14 +342,25 @@ export function validateAmount(
 }
 
 /**
- * Validate a full batch — total must not exceed spendable balance.
+ * Validate a full batch — total must not exceed the spendable balance of the
+ * selected asset. For USDC, `balance` is null when no trustline exists yet;
+ * the XLM reserve buffer only applies to native XLM sends since the reserve
+ * itself is held in XLM regardless of what asset is being sent.
  */
 export function validateBatch(
   recipients: RecipientEntry[],
-  balanceXlm: string,
+  balance: string | null,
+  asset: AssetCode = "XLM",
 ): { valid: boolean; error?: string } {
   if (recipients.length === 0) {
     return { valid: false, error: "Add at least one recipient." };
+  }
+
+  if (asset === "USDC" && balance === null) {
+    return {
+      valid: false,
+      error: "Add a USDC trustline before sending USDC.",
+    };
   }
 
   for (let i = 0; i < recipients.length; i++) {
@@ -295,14 +387,14 @@ export function validateBatch(
   }
 
   const total = recipients.reduce((sum, r) => sum + Number(r.amount), 0);
-  const balance = Number(balanceXlm);
-  const spendable = balance - RESERVE_BUFFER_XLM;
+  const spendable =
+    asset === "XLM" ? Number(balance) - RESERVE_BUFFER_XLM : Number(balance);
   if (total > spendable) {
     return {
       valid: false,
-      error: `Total ${total.toFixed(
-        7,
-      )} XLM exceeds spendable balance (~${spendable.toFixed(4)} XLM).`,
+      error: `Total ${total.toFixed(7)} ${asset} exceeds spendable balance (~${spendable.toFixed(
+        4,
+      )} ${asset}${asset === "XLM" ? " after reserve + fee" : ""}).`,
     };
   }
 
@@ -373,6 +465,7 @@ function humanizeResultCode(code: string): string {
     op_no_trust: "The destination doesn't trust this asset.",
     op_line_full: "The destination's balance limit would be exceeded.",
     op_malformed: "The payment operation is malformed.",
+    op_low_reserve: "Not enough XLM to cover the reserve for this trustline.",
     tx_insufficient_balance: "Insufficient balance to cover the fee.",
     tx_bad_seq: "Bad sequence number — please retry.",
     tx_too_late: "The transaction expired before submission. Please retry.",

@@ -26,5 +26,15 @@ export function explorerTxUrl(hash: string): string {
   return `https://stellar.expert/explorer/testnet/tx/${hash}`;
 }
 
+/** Circle's official USDC issuer account on Stellar Testnet. */
+export const USDC_ISSUER =
+  process.env.NEXT_PUBLIC_USDC_ISSUER ??
+  "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
+
+export const USDC_ASSET_CODE = "USDC";
+
+/** Reserve added to an account's minimum balance per trustline (in XLM). */
+export const TRUSTLINE_RESERVE_XLM = 0.5;
+
 /** Install page for the Freighter browser extension. */
 export const FREIGHTER_INSTALL_URL = "https://www.freighter.app/";

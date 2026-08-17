@@ -1,37 +1,43 @@
 "use client";
 
-import { formatXlm } from "@/lib/format";
+import { formatAmount } from "@/lib/format";
 import { Alert } from "./Alert";
 
 interface BalanceCardProps {
   xlm: string | null;
+  usdc: string | null;
   funded: boolean;
   loading: boolean;
   funding: boolean;
+  addingTrustline: boolean;
   error: string | null;
   onRefresh: () => void;
   onFund: () => void;
+  onAddTrustline: () => void;
 }
 
 export function BalanceCard({
   xlm,
+  usdc,
   funded,
   loading,
   funding,
+  addingTrustline,
   error,
   onRefresh,
   onFund,
+  onAddTrustline,
 }: BalanceCardProps) {
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 sm:p-5">
+    <section className="rounded-md border-[0.5px] border-white/7 bg-graphite p-3 sm:p-5">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-slate-400 sm:text-sm">
+        <h2 className="text-[9px] font-medium uppercase tracking-wide text-ash sm:text-[10px]">
           Balance
         </h2>
         <button
           onClick={onRefresh}
           disabled={loading}
-          className="rounded-md border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300 transition hover:bg-slate-800 disabled:opacity-50 sm:px-2.5 sm:py-1 sm:text-xs"
+          className="rounded-pill bg-white/5 px-2 py-0.5 text-[10px] font-normal text-snow transition-colors hover:bg-white/10 disabled:opacity-50 sm:px-2.5 sm:py-1 sm:text-xs"
         >
           {loading ? "Refreshing..." : "Refresh"}
         </button>
@@ -44,7 +50,7 @@ export function BalanceCard({
       )}
 
       {loading && xlm === null ? (
-        <div className="h-7 w-36 animate-pulse rounded bg-slate-800 sm:h-9 sm:w-48" />
+        <div className="h-7 w-36 animate-pulse rounded-sm bg-charcoal sm:h-9 sm:w-48" />
       ) : !funded ? (
         <div className="space-y-3">
           <Alert variant="warning">
@@ -54,16 +60,36 @@ export function BalanceCard({
           <button
             onClick={onFund}
             disabled={funding}
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50 sm:px-4 sm:py-2 sm:text-sm"
+            className="rounded-pill bg-bone px-3 py-1.5 text-xs font-normal text-ink shadow-[0_1px_4px_rgba(0,0,0,0.1),0_0_1px_rgba(0,0,0,0.1)] transition-colors hover:bg-white disabled:opacity-50 sm:px-4 sm:py-2 sm:text-sm"
           >
             {funding ? "Funding via Friendbot..." : "Fund with Friendbot"}
           </button>
         </div>
       ) : (
-        <p className="font-mono text-2xl font-semibold text-slate-100 sm:text-3xl">
-          {xlm !== null ? formatXlm(xlm) : "—"}{" "}
-          <span className="text-sm text-slate-400 sm:text-lg">XLM</span>
-        </p>
+        <div className="divide-y-[0.5px] divide-white/7 rounded-sm border-[0.5px] border-white/8 bg-charcoal">
+          <div className="flex items-center justify-between px-3 py-2.5">
+            <span className="text-xs font-normal text-ash">XLM</span>
+            <span className="font-mono text-base font-normal text-snow sm:text-lg">
+              {xlm !== null ? formatAmount(xlm) : "—"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between px-3 py-2.5">
+            <span className="text-xs font-normal text-ash">USDC</span>
+            {usdc !== null ? (
+              <span className="font-mono text-base font-normal text-snow sm:text-lg">
+                {formatAmount(usdc)}
+              </span>
+            ) : (
+              <button
+                onClick={onAddTrustline}
+                disabled={addingTrustline}
+                className="rounded-pill bg-white/5 px-2.5 py-1 text-[10px] font-normal text-snow transition-colors hover:bg-white/10 disabled:opacity-50 sm:text-xs"
+              >
+                {addingTrustline ? "Adding..." : "Add trustline"}
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </section>
   );
