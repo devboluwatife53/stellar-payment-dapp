@@ -1,41 +1,24 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@/hooks/useWallet";
 import { useBalance } from "@/hooks/useBalance";
 import { WalletBar } from "@/components/WalletBar";
-import { BalanceCard } from "@/components/BalanceCard";
-import { BatchPaymentForm } from "@/components/BatchPaymentForm";
-import { TransactionHistory } from "@/components/TransactionHistory";
+import { WithdrawForm } from "@/components/WithdrawForm";
 import { Alert } from "@/components/Alert";
-import {
-  EXPECTED_NETWORK,
-  FREIGHTER_INSTALL_URL,
-} from "@/lib/constants";
-import {
-  getHistory,
-  addToHistory,
-  type HistoryEntry,
-} from "@/lib/stellar";
+import { EXPECTED_NETWORK, FREIGHTER_INSTALL_URL } from "@/lib/constants";
 
-export default function AppPage() {
+export default function WithdrawPage() {
   const wallet = useWallet();
   const balance = useBalance(wallet.publicKey);
-  const [history, setHistory] = useState<HistoryEntry[]>(getHistory());
-
-  function handleTxComplete(entry: HistoryEntry) {
-    addToHistory(entry);
-    setHistory(getHistory());
-  }
 
   return (
     <main className="mx-auto flex min-h-dvh min-h-screen max-w-2xl flex-col gap-4 px-4 py-5 sm:gap-6 sm:px-6 sm:py-8">
       <Link
-        href="/"
+        href="/app"
         className="inline-flex w-fit items-center gap-1 text-[12px] font-normal text-ash transition-colors hover:text-snow"
       >
-        ← Stellar Payroll
+        ← Batch Payment
       </Link>
 
       <WalletBar
@@ -82,52 +65,15 @@ export default function AppPage() {
 
       {!wallet.publicKey ? (
         <div className="rounded-md border-[0.5px] border-dashed border-white/10 p-8 text-center text-sm text-fog sm:p-10">
-          <p>
-            Connect your Freighter wallet to send batch payments on Stellar
-            Testnet.
-          </p>
+          <p>Connect your Freighter wallet to withdraw USDC to a bank account.</p>
         </div>
       ) : (
-        <>
-          <BalanceCard
-            xlm={balance.xlm}
-            usdc={balance.usdc}
-            funded={balance.funded}
-            loading={balance.loading}
-            funding={balance.funding}
-            addingTrustline={balance.addingTrustline}
-            error={balance.error}
-            onRefresh={balance.refresh}
-            onFund={balance.fund}
-            onAddTrustline={balance.addTrustline}
-          />
-
-          <BatchPaymentForm
-            sourcePublicKey={wallet.publicKey}
-            balanceXlm={balance.xlm}
-            balanceUsdc={balance.usdc}
-            funded={balance.funded}
-            disabled={wallet.wrongNetwork}
-            addingTrustline={balance.addingTrustline}
-            onAddTrustline={balance.addTrustline}
-            onSuccess={balance.refresh}
-            onTxComplete={handleTxComplete}
-          />
-
-          <Link
-            href="/app/withdraw"
-            className="flex items-center justify-between rounded-md border-[0.5px] border-white/7 bg-graphite px-4 py-3 text-sm text-snow transition-colors hover:bg-white/[0.03]"
-          >
-            <span>Withdraw USDC to a bank account (NGN)</span>
-            <span aria-hidden className="text-ash">→</span>
-          </Link>
-
-          <TransactionHistory entries={history} />
-        </>
+        <WithdrawForm balanceUsdc={balance.usdc} />
       )}
 
       <footer className="mt-auto pt-4 text-center text-xs text-steel">
-        Stellar Testnet demo — test XLM and USDC only, no real funds are used.
+        Stellar Testnet demo — no real funds move. Off-ramp is simulated
+        until a SEP-24 anchor is live on testnet.
       </footer>
     </main>
   );
